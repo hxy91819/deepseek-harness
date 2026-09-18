@@ -1,0 +1,22 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "call_pause", "name": "bash", "argumentsDelta": "{\"command\":\"node -e \\\"require('node:fs').writeFileSync('steer-ready.txt', 'ready'); setTimeout(() => {}, 2500)\\\"\",\"description\":\"Hold the turn open for steering\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_pause", "name": "bash", "arguments": "{\"command\":\"node -e \\\"require('node:fs').writeFileSync('steer-ready.txt', 'ready'); setTimeout(() => {}, 2500)\\\"\",\"description\":\"Hold the turn open for steering\"}" } },
+      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 10 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "text" },
+      { "type": "text-delta", "index": 0, "text": "Steered answer." },
+      { "type": "block-end", "index": 0, "block": { "type": "text", "text": "Steered answer." } },
+      { "type": "usage", "usage": { "inputTokens": 12, "outputTokens": 2 } },
+      { "type": "finish", "reason": { "kind": "stop" } }
+    ]
+  }
+]

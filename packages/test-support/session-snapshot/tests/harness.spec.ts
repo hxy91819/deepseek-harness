@@ -727,6 +727,32 @@ describe('runScenario', () => {
     )).rejects.toThrow(/workspace file "never\.txt" did not appear within 20ms/)
   })
 
+  it('promptAndSteer sends a second prompt while the first is in flight and settles both', { timeout: 20_000 }, async () => {
+    const { fixtureFile } = await scenario({ prompt: 'steer' })
+    const result = await runScenario(
+      { steps: [...boot, { op: 'promptAndSteer', text: 'first', steerText: 'second' }] },
+      { agent: AGENT, mode: 'replay', fixtureFile },
+    )
+    // Both prompt requests return end_turn; neither is rejected as busy.
+    expect(result.rawStdout.match(/"stopReason":"end_turn"/g)).toHaveLength(2)
+  })
+
+  it('promptAndSteer can wait for cwd-relative readiness before steering', { timeout: 20_000 }, async () => {
+    const { fixtureFile } = await scenario({ prompt: 'steer', markerFile: 'steer-ready.txt' })
+    const result = await runScenario(
+      {
+        steps: [...boot, {
+          op: 'promptAndSteer',
+          text: 'first',
+          steerText: 'second',
+          waitForFile: { path: 'steer-ready.txt' },
+        }],
+      },
+      { agent: AGENT, mode: 'replay', fixtureFile },
+    )
+    expect(result.rawStdout.match(/"stopReason":"end_turn"/g)).toHaveLength(2)
+  })
+
   it('promptAndWaitForAgentMessage keeps the app live through a matching later update', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ prompt: 'respond' })
     const result = await runScenario(
@@ -1311,6 +1337,7 @@ describe('runScenario', () => {
     [{ op: 'promptAndWaitForAgentMessage', text: 'x', waitForText: 'later' }, /promptAndWaitForAgentMessage before newSession/],
     [{ op: 'promptExpectError', text: 'x' }, /promptExpectError before newSession/],
     [{ op: 'promptAndCancel', text: 'x' }, /promptAndCancel before newSession/],
+    [{ op: 'promptAndSteer', text: 'x', steerText: 'y' }, /promptAndSteer before newSession/],
     [{ op: 'waitForTurnStart' }, /waitForTurnStart before newSession/],
     [{ op: 'waitForTurnEnd' }, /waitForTurnEnd before newSession/],
     [{ op: 'waitForGoalPhase', phase: 'active' }, /waitForGoalPhase before newSession/],

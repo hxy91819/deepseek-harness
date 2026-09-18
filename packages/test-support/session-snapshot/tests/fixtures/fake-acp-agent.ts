@@ -43,8 +43,11 @@ interface Behavior {
   rejectNewSession?: boolean
   /** Reject `session/new` only when `additionalDirectories` is non-empty (the real bridge's rule). */
   rejectExtraDirs?: boolean
-  /** How `session/prompt` settles: a clean response, a JSON-RPC error, or a hang until `session/cancel`. */
-  prompt?: 'respond' | 'error' | 'hang-until-cancel'
+  /** How `session/prompt` settles: a clean response, a JSON-RPC error, a hang until `session/cancel`, or a parked
+   * first prompt that a second prompt settles together. */
+  prompt?: 'respond' | 'error' | 'hang-until-cancel' | 'steer'
+  /** A cwd-relative file the parked prompt writes for `waitForFile` readiness. */
+  markerFile?: string
   /** Persist the scripted logs while handling cancellation, before stdin EOF. */
   persistLogsOnCancel?: boolean
   /** Before responding to a prompt, send a `session/request_permission` request and echo its outcome as a chunk. */
@@ -185,6 +188,21 @@ async function handlePrompt(id: number | string): Promise<void> {
     case 'hang-until-cancel':
       persistParkedTurnStart()
       parkedPromptId = id
+      return
+    case 'steer':
+      // The first prompt parks as an open turn; a concurrent second prompt
+      // settles both with the shared turn's stop reason, mirroring mid-turn
+      // steering on a real bridge.
+      if (parkedPromptId === null) {
+        persistParkedTurnStart()
+        if (behavior.markerFile !== undefined) writeFileSync(join(sessionCwd, behavior.markerFile), '')
+        parkedPromptId = id
+        return
+      }
+      respond(parkedPromptId, { stopReason: 'end_turn' })
+      parkedPromptId = null
+      clearParkedTurnStart()
+      respond(id, { stopReason: 'end_turn' })
       return
   }
 }
