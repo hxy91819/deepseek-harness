@@ -20,7 +20,7 @@ Status: implemented
 
 ## Per-session 所有权
 
-每个已公布 Agent 由一个 `AcpSession` 模块拥有，该模块同时拥有所选模型状态、请求 MCP 挂载、单提示词槽位、有序更新链和记忆化关闭操作。全局事件监听器只识别确切 Agent 或 Session，再委托给该模块。模块会在内存中把准入快照与已识别消息关联到 inbox claim 时刻，再将其固定到已准入轮次。因此，图片能力检查、提示词变量、请求 header 和每个模型步骤都使用同一个提供方／模型／reasoning tuple，而普通持久用户 source 保持不变。并发配置变更从下一个 ACP 轮次开始生效。
+每个已公布 Agent 由一个 `AcpSession` 模块拥有，该模块同时拥有所选模型状态、请求 MCP 挂载、进行中提示词集合、有序更新链和记忆化关闭操作。全局事件监听器只识别确切 Agent 或 Session，再委托给该模块。模块会在内存中把准入快照与已识别消息关联到 inbox claim 时刻，再将其固定到已准入轮次。因此，图片能力检查、提示词变量、请求 header 和每个模型步骤都使用同一个提供方／模型／reasoning tuple，而普通持久用户 source 保持不变。并发配置变更从下一个 ACP 轮次开始生效。
 
 显式 `session/close`、连接丢失和插件释放调用同一个关闭操作。它会先取消准入和 Agent 工作，再等待；随后 drain 已提交更新和可继续后代、flush 持久化，并释放 Agent scope 及其 MCP 客户端。关闭流程会保留事件路由直到 drain 完成。只有所有自有会话 teardown 都完成后才报告失败，其他前端的 Agent 和后代不受影响。
 
