@@ -18,7 +18,7 @@ Status: implemented
 
 只有明确拥有一个活动区间时，高层自动化 API 才返回 `RunResult`。TypeScript 和 Python SDK 的 `run()` 方法从已提交消息的持久 inbox 回执开始收集，直至整个 agent 下一次进入 `idle`；其最终响应是该区间内最后一条已提交的 assistant 消息，而不是按因果关系归属于已提交提示词的响应。Python SDK 还把根会话最后一个轮次的结束原因 kind 作为运行级 [`finish_reason`](../../archived/bug-fix/2026-08-11-owned-run-finish-reason.md) 返回，但不会将其归因于已提交的提示词。单次 CLI（命令行界面）拥有相应的 idle 到 idle 区间。隔离的子 agent 运行可以报告结果，因为调用方拥有完整的子级生命周期，任何 steering 都属于该运行。
 
-ACP（Agent Client Protocol）必须返回协议规定的 `stopReason`。其桥接层对每个 ACP 会话中的提示词进行串行处理，并拥有从准入到整个 Agent idle 和有序更新交付的区间。它会关联准入该已识别 ACP 消息的轮次，但不会声称区间内所有活动都只由该消息引起。关联的 token 上限结尾映射为标准 `max_tokens`；关联模型错误在同一个完全停稳边界拒绝；无轮次 slot 与显式 ACP 取消或 dispose 一样以 `cancelled` 结算。其他正常完全停稳报告 `end_turn`。
+ACP（Agent Client Protocol）必须返回协议规定的 `stopReason`。其桥接层跟踪每个 ACP 会话中所有已准入提示词，并拥有各自从准入到整个 Agent idle 和有序更新交付的区间，在另一个提示词进行中提交的提示词按轮次中 steering 路由。它会关联准入该已识别 ACP 消息的轮次，但不会声称区间内所有活动都只由该消息引起。关联的 token 上限结尾映射为标准 `max_tokens`；关联模型错误在同一个完全停稳边界拒绝；未被任何轮次认领的提示词与显式 ACP 取消或 dispose 一样以 `cancelled` 结算。其他正常完全停稳报告 `end_turn`。
 
 Goal 续行只保留 `MessageId`，用于识别持久排队和已准入的 goal 消息。它在整个 agent 进入 idle 时根据持久 goal 状态推进，不把消息映射到轮次结果。
 

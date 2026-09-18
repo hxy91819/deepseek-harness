@@ -39,7 +39,7 @@ describe('automation-only ACP bridge', () => {
     harness = undefined
   })
 
-  it('advertises the standard automation controls without private metadata', async () => {
+  it('advertises the standard automation controls and mid-turn steering', async () => {
     harness = await makeBridgeHarness()
     const response = await harness.client.initialize({
       protocolVersion: PROTOCOL_VERSION,
@@ -55,6 +55,7 @@ describe('automation-only ACP bridge', () => {
         sessionCapabilities: { close: {}, list: {}, resume: {} },
       },
       authMethods: [],
+      _meta: { midTurnSteering: true },
     })
   })
 

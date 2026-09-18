@@ -55,7 +55,7 @@ describe('ACP multi-session isolation', () => {
     await vi.waitFor(() => { expect(messageTextFor(harness!.sessionUpdates, b)).toBe('B done') })
   })
 
-  it('enforces one in-flight prompt independently for each session', async () => {
+  it('steers concurrent prompts independently for each session', async () => {
     harness = await makeBridgeHarness({ script: ['hang', 'hang'] })
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const a = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
@@ -67,11 +67,19 @@ describe('ACP multi-session isolation', () => {
       expect(harness!.ctx.agents.get(SessionId(b))?.status).toBe('running')
     })
 
-    await expect(harness.client.prompt({ sessionId: a, prompt: [{ type: 'text', text: 'again' }] }))
-      .rejects.toThrow(/already in flight/)
+    // A second prompt steers inside session A without disturbing session B.
+    const steeredA = harness.client.prompt({ sessionId: a, prompt: [{ type: 'text', text: 'again' }] })
+    await vi.waitFor(() => {
+      expect(harness!.ctx.agents.get(SessionId(a))!.session.snapshotEvents()
+        .some(event => event.type === 'agent/inbox/spliced'
+          && event.data.target === 'next-step' && event.data.inserted.length > 0)).toBe(true)
+    })
     await Promise.all([harness.client.cancel({ sessionId: a }), harness.client.cancel({ sessionId: b })])
     await expect(pendingA).resolves.toEqual({ stopReason: 'cancelled' })
     await expect(pendingB).resolves.toEqual({ stopReason: 'cancelled' })
+    await expect(steeredA).resolves.toEqual({ stopReason: 'cancelled' })
+    expect(harness.ctx.agents.get(SessionId(b))!.session.snapshotEvents()
+      .some(event => event.type === 'agent/inbox/spliced' && event.data.target === 'next-step')).toBe(false)
   })
 
   it('drains every live session on bridge disposal', async () => {

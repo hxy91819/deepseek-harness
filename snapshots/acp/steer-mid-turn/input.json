@@ -1,0 +1,13 @@
+{
+  "steps": [
+    { "op": "initialize" },
+    { "op": "newSession" },
+    {
+      "op": "promptAndSteer",
+      "text": "Run a shell pause, then answer; a second prompt steers this turn mid-flight.",
+      "steerText": "Fold this steering instruction into the running turn's next step.",
+      "waitForFile": { "path": "steer-ready.txt" }
+    },
+    { "op": "waitForTurnEnd" }
+  ]
+}
