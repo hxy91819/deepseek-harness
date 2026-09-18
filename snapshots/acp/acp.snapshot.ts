@@ -32,6 +32,10 @@ const controllerCases: readonly {
   { name: 'reject-extra-dirs', hasModelTurn: false },
   { name: 'cancel', hasModelTurn: true },
   { name: 'cancel-tool-calls', hasModelTurn: true },
+  // Authored mid-turn steering: a bash call holds the turn open behind a
+  // readiness marker while a second session/prompt steers the running turn;
+  // both prompts settle with the shared turn's stop reason.
+  { name: 'steer-mid-turn', hasModelTurn: true },
   { name: 'escalation-approved', hasModelTurn: true },
   { name: 'escalation-rejected', hasModelTurn: true },
   { name: 'fs-escalation-approved', hasModelTurn: true },

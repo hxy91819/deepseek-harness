@@ -1,7 +1,8 @@
-import { createUserMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ToolCallId, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import {
   errorResponse,
   makeBridgeHarness,
@@ -13,6 +14,16 @@ import {
 async function newSession(harness: BridgeHarness): Promise<string> {
   await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
   return (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
+}
+
+function toolCallResponse(): StreamChunk[] {
+  return [
+    { type: 'block-start', index: 0, blockType: 'tool-call' },
+    { type: 'tool-call-delta', index: 0, id: ToolCallId('call-1'), name: 'echo', argumentsDelta: '{}' },
+    { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('call-1'), name: 'echo', arguments: '{}' } },
+    { type: 'usage', usage: { inputTokens: 8, outputTokens: 2 } },
+    { type: 'finish', reason: { kind: 'tool-calls' } },
+  ]
 }
 
 function messageText(harness: BridgeHarness): string {
@@ -252,15 +263,130 @@ describe('ACP prompt lifecycle', () => {
       .rejects.toThrow(/prompt was not queued/)
   })
 
-  it('permits only one in-flight prompt per session', async () => {
+  it('steers a concurrent prompt into the running turn instead of rejecting it', async () => {
+    const gate = Promise.withResolvers<undefined>()
+    harness = await makeBridgeHarness({ script: [toolCallResponse(), textResponse('steered answer')] })
+    harness.ctx.tools.register(defineContentToolFixture({
+      name: 'echo',
+      description: 'Hold the turn open.',
+      parameters: {},
+      execute: async () => {
+        await gate.promise
+        return [{ type: 'text', text: 'tool result' }]
+      },
+    }))
+    const sessionId = await newSession(harness)
+    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'one' }] })
+    await vi.waitFor(() => {
+      expect(agent.session.snapshotEvents().some(event => event.type === 'tool/call')).toBe(true)
+    })
+
+    const second = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'two' }] })
+    // The steered message is durably parked at the open turn's next-step boundary.
+    await vi.waitFor(() => {
+      expect(agent.session.snapshotEvents().some(event => event.type === 'agent/inbox/spliced'
+        && event.data.target === 'next-step'
+        && event.data.inserted.some(message => message.content[0]?.type === 'text'
+          && message.content[0].text === 'two'))).toBe(true)
+    })
+    gate.resolve(undefined)
+
+    await expect(first).resolves.toEqual({ stopReason: 'end_turn' })
+    await expect(second).resolves.toEqual({ stopReason: 'end_turn' })
+    const events = agent.session.snapshotEvents()
+    expect(events.filter(event => event.type === 'turn/start')).toHaveLength(1)
+    expect(events.some(event => event.type === 'step/start' && event.data.step === 2)).toBe(true)
+    expect(harness.adapter.requests[1]?.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'two' }])
+    await vi.waitFor(() => { expect(messageText(harness!)).toBe('steered answer') })
+  })
+
+  it('settles a steered prompt as cancelled when the inbox discards it', async () => {
     harness = await makeBridgeHarness({ script: ['hang'] })
     const sessionId = await newSession(harness)
+    const agent = harness.ctx.agents.get(SessionId(sessionId))!
     const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'one' }] })
-    await vi.waitFor(() => { expect(harness!.ctx.agents.get(SessionId(sessionId))?.status).toBe('running') })
-    await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'two' }] }))
-      .rejects.toThrow(/already in flight/)
+    await vi.waitFor(() => { expect(agent.status).toBe('running') })
+    const second = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'two' }] })
+    const steered = await vi.waitFor(() => {
+      const parked = agent.session.snapshotEvents().flatMap(event =>
+        event.type === 'agent/inbox/spliced' && event.data.target === 'next-step' ? event.data.inserted : [])
+      expect(parked.length).toBeGreaterThan(0)
+      return parked[0]!
+    })
+
+    agent.inbox.remove(steered.id)
+    await expect(second).resolves.toEqual({ stopReason: 'cancelled' })
     await harness.client.cancel({ sessionId })
     await expect(first).resolves.toEqual({ stopReason: 'cancelled' })
+  })
+
+  it('steers a prompt sent between turns into a fresh turn', async () => {
+    const script: StreamChunk[][] = []
+    harness = await makeBridgeHarness({ script })
+    const ref = await harness.attachments!.saveImage({ data: Uint8Array.of(5), mediaType: 'image/png' })
+    script.push([
+      { type: 'block-start', index: 0, blockType: 'image' },
+      { type: 'block-end', index: 0, block: { type: 'image', attachment: ref } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ], textResponse('second answer'))
+    const readStarted = Promise.withResolvers<undefined>()
+    const releaseRead = Promise.withResolvers<undefined>()
+    harness.attachments!.beforeRead = () => {
+      readStarted.resolve(undefined)
+      return releaseRead.promise
+    }
+    const sessionId = await newSession(harness)
+    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'one' }] })
+    // Turn 1 closes while the first prompt still waits on blocked output delivery,
+    // so the second prompt steers while the driver is idle and opens turn 2.
+    await readStarted.promise
+    const second = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'two' }] })
+    await vi.waitFor(() => {
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(2)
+    })
+    releaseRead.resolve(undefined)
+
+    await expect(first).resolves.toEqual({ stopReason: 'end_turn' })
+    await expect(second).resolves.toEqual({ stopReason: 'end_turn' })
+    expect(harness.adapter.requests[1]?.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'two' }])
+  })
+
+  it('settles a parked steered prompt when the agent stops with its inbox intact', async () => {
+    harness = await makeBridgeHarness({ script: ['hang'] })
+    const sessionId = await newSession(harness)
+    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'one' }] })
+    await vi.waitFor(() => { expect(agent.status).toBe('running') })
+    const second = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'two' }] })
+    await vi.waitFor(() => {
+      expect(agent.session.snapshotEvents().some(event => event.type === 'agent/inbox/spliced'
+        && event.data.target === 'next-step' && event.data.inserted.length > 0)).toBe(true)
+    })
+
+    agent.cancel({ kind: 'user' }, { keepInbox: true })
+
+    await expect(second).resolves.toEqual({ stopReason: 'cancelled' })
+    await expect(first).resolves.toEqual({ stopReason: 'end_turn' })
+  })
+
+  it('cancels every in-flight prompt of the session', async () => {
+    harness = await makeBridgeHarness({ script: ['hang'] })
+    const sessionId = await newSession(harness)
+    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'one' }] })
+    await vi.waitFor(() => { expect(agent.status).toBe('running') })
+    const second = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'two' }] })
+    await vi.waitFor(() => {
+      expect(agent.session.snapshotEvents().some(event => event.type === 'agent/inbox/spliced'
+        && event.data.target === 'next-step' && event.data.inserted.length > 0)).toBe(true)
+    })
+
+    await harness.client.cancel({ sessionId })
+
+    await expect(first).resolves.toEqual({ stopReason: 'cancelled' })
+    await expect(second).resolves.toEqual({ stopReason: 'cancelled' })
   })
 
   it('routes JSON-RPC request cancellation through the prompt cancellation path', async () => {
@@ -292,7 +418,7 @@ describe('ACP prompt lifecycle', () => {
     expect(harness.adapter.requests).toEqual([])
   })
 
-  it('reserves the prompt slot during image admission and cancels without a late followup', async () => {
+  it('accepts a concurrent prompt during image admission and settles both on cancel', async () => {
     harness = await makeBridgeHarness({ imageCapable: true, script: [] })
     const validationStarted = Promise.withResolvers<undefined>()
     const releaseValidation = Promise.withResolvers<undefined>()
@@ -308,13 +434,18 @@ describe('ACP prompt lifecycle', () => {
     }).finally(() => { settled = true })
     await validationStarted.promise
 
-    await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'second' }] }))
-      .rejects.toThrow(/already in flight/)
+    // A prompt admitted while another is still in admission steers rather than
+    // rejecting; cancellation must abort both admissions before either sends.
+    const second = harness.client.prompt({
+      sessionId,
+      prompt: [{ type: 'image', data: 'Ag==', mimeType: 'image/png' }],
+    })
     await harness.client.cancel({ sessionId })
     expect(settled).toBe(false)
     releaseValidation.resolve(undefined)
 
     await expect(first).resolves.toEqual({ stopReason: 'cancelled' })
+    await expect(second).resolves.toEqual({ stopReason: 'cancelled' })
     expect(harness.adapter.requests).toEqual([])
     const events = harness.ctx.agents.get(SessionId(sessionId))?.session.snapshotEvents() ?? []
     expect(events.some(event => event.type === 'user/message' || event.type === 'turn/start')).toBe(false)
