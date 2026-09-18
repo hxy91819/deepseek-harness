@@ -92,7 +92,7 @@ function selectionFor(
 
 /**
  * Per-session ACP module. It owns the unpublished Agent composition, selected
- * route, one-prompt admission slot, ordered standard updates, and memoized
+ * route, in-flight prompt set, ordered standard updates, and memoized
  * quiescent teardown.
  */
 export class AcpSession {
@@ -100,7 +100,7 @@ export class AcpSession {
   readonly agent: Agent
   private readonly modelControl: AcpModelControl
   private outputTail = Promise.resolve()
-  private inflight: InflightPrompt | undefined
+  private readonly inflights = new Set<InflightPrompt>()
   private closing: Promise<void> | undefined
   private readonly pendingSelections = new Map<string, ModelSelection>()
 
@@ -246,7 +246,6 @@ export class AcpSession {
     requestSignal?: AbortSignal,
   ): Promise<PromptResponse> {
     this.assertActive()
-    if (this.inflight !== undefined) throw invalidParams('a prompt is already in flight for this session')
     const completion = Promise.withResolvers<StopReason>()
     const admission = Promise.withResolvers<void>()
     const admissionController = new AbortController()
@@ -265,8 +264,8 @@ export class AcpSession {
       outputError: undefined,
       agentError: undefined,
     }
-    this.inflight = inflight
-    const onRequestAbort = (): void => { this.cancelPrompt('ACP prompt request cancelled') }
+    this.inflights.add(inflight)
+    const onRequestAbort = (): void => { this.cancelPrompt(inflight, 'ACP prompt request cancelled') }
     requestSignal?.addEventListener('abort', onRequestAbort, { once: true })
     /* v8 ignore next -- the SDK dispatches a live signal, then notifies abort through its listener. */
     if (requestSignal?.aborted === true) onRequestAbort()
@@ -296,7 +295,13 @@ export class AcpSession {
         inflight.messageQueued = true
         if (promptSelection !== undefined) this.pendingSelections.set(message.id, promptSelection)
         try {
-          this.agent.followup(message)
+          // The only in-flight prompt follows up normally; a concurrent prompt
+          // steers so the running turn claims it at the nearest step boundary.
+          if (this.inflights.size === 1) {
+            this.agent.followup(message)
+          } else {
+            this.agent.steer(message)
+          }
         } catch (error: unknown) {
           inflight.messageQueued = false
           this.pendingSelections.delete(message.id)
@@ -313,7 +318,7 @@ export class AcpSession {
         return { stopReason: await completion.promise }
       }
       if (admissionFailure !== undefined) {
-        this.inflight = undefined
+        this.inflights.delete(inflight)
         if (admissionFailure instanceof AcpContentError) {
           throw admissionFailure.kind === 'invalid'
             ? invalidParams(admissionFailure.message)
@@ -330,11 +335,11 @@ export class AcpSession {
     }
   }
 
-  /** Cancel the active prompt, or autonomous work when no ACP prompt exists. */
+  /** Cancel every in-flight prompt, or autonomous work when no ACP prompt exists. */
   cancel(): void {
-    const inflight = this.inflight
-    this.cancelPrompt('ACP prompt cancelled')
-    if (inflight === undefined) this.agent.cancel({ kind: 'user' })
+    const inflights = [...this.inflights]
+    for (const inflight of inflights) this.cancelPrompt(inflight, 'ACP prompt cancelled')
+    if (inflights.length === 0) this.agent.cancel({ kind: 'user' })
   }
 
   /**
@@ -345,7 +350,7 @@ export class AcpSession {
   onSessionEvent(session: Session, event: SessionEvent): void {
     try {
       if (event.type === 'assistant/message') {
-        const inflight = this.inflight?.turn === event.data.turn ? this.inflight : undefined
+        const owners = [...this.inflights].filter(inflight => inflight.turn === event.data.turn)
         const previous = this.outputTail
         const delivery = previous.then(async () => {
           for (const update of await assistantUpdates(this.ctx, session, event)) {
@@ -354,7 +359,7 @@ export class AcpSession {
         })
         this.outputTail = delivery.catch((error: unknown) => {
           const failure = error as Error
-          if (inflight !== undefined) inflight.outputError ??= failure
+          for (const inflight of owners) inflight.outputError ??= failure
           this.ctx.logger.warn(`acp: assistant output conversion failed: ${errorChain(error)}`)
         })
       } else if (event.type === 'tool/call') {
@@ -380,11 +385,12 @@ export class AcpSession {
         /* v8 ignore stop */
       }
     } finally {
-      const inflight = this.inflight
-      if (inflight !== undefined && event.type === 'turn/end' && inflight.turn === event.data.turn) {
-        inflight.endReason = event.data.reason
+      if (event.type === 'turn/end') {
+        for (const inflight of this.inflights) {
+          if (inflight.turn === event.data.turn) inflight.endReason = event.data.reason
+        }
+        this.modelControl.releaseTurn(event.data.turn)
       }
-      if (event.type === 'turn/end') this.modelControl.releaseTurn(event.data.turn)
     }
   }
 
@@ -394,25 +400,41 @@ export class AcpSession {
    * @param turn - allocated Agent turn.
    */
   onInboxClaimed(message: UserMessage, turn: number): void {
-    if (this.inflight !== undefined && this.inflight.messageId === message.id) this.inflight.turn = turn
+    for (const inflight of this.inflights) {
+      if (inflight.messageId === message.id) inflight.turn = turn
+    }
     const selection = this.pendingSelections.get(message.id)
     this.pendingSelections.delete(message.id)
     if (selection !== undefined) this.modelControl.pinTurn(turn, selection)
   }
 
   /**
-   * Correlate an Agent interval failure with the active ACP prompt.
+   * Correlate an Agent interval failure with the in-flight ACP prompts.
    * @param turn - failed turn number.
    * @param error - original same-process failure.
    */
   onAgentError(turn: number, error: unknown): void {
-    const inflight = this.inflight
-    if (inflight === undefined || !inflight.messageQueued) return
-    // AgentLoop balances an in-turn failure with durable turn/end; settlement
-    // reads that exact error reason. This slot records interval failures outside it.
-    if (inflight.turn === turn) return
-    inflight.agentError = new Error(errorChain(error))
-    this.settleAfterQuiescence(inflight)
+    for (const inflight of this.inflights) {
+      if (!inflight.messageQueued || inflight.turn === turn) continue
+      // AgentLoop balances an in-turn failure with durable turn/end; settlement
+      // reads that exact error reason. This slot records interval failures outside it.
+      inflight.agentError = new Error(errorChain(error))
+      this.settleAfterQuiescence(inflight)
+    }
+  }
+
+  /**
+   * Settle the prompt whose queued message left the inbox unclaimed.
+   * @param message - discarded durable inbox message.
+   */
+  onInboxDiscarded(message: UserMessage): void {
+    for (const inflight of this.inflights) {
+      if (inflight.messageId !== message.id) continue
+      this.inflights.delete(inflight)
+      this.pendingSelections.delete(message.id)
+      inflight.resolve('cancelled')
+      return
+    }
   }
 
   /** Await every update queued before this call. */
@@ -429,11 +451,11 @@ export class AcpSession {
     if (this.closing !== undefined) return this.closing
     this.closing = (async () => {
       const failures: unknown[] = []
-      const inflight = this.inflight
-      this.cancelPrompt(detail)
-      if (inflight === undefined || !inflight.messageQueued) this.agent.cancel({ kind: 'user' })
+      const inflights = [...this.inflights]
+      for (const inflight of inflights) this.cancelPrompt(inflight, detail)
+      if (inflights.every(inflight => !inflight.messageQueued)) this.agent.cancel({ kind: 'user' })
       try {
-        await inflight?.admissionDone
+        await Promise.all(inflights.map(inflight => inflight.admissionDone))
         await this.agent.whenIdle()
         await this.outputTail
       } catch (error: unknown) {
@@ -471,9 +493,7 @@ export class AcpSession {
     if (this.closing !== undefined) throw invalidParams(`session is closing: ${this.agent.session.id}`)
   }
 
-  private cancelPrompt(detail: string): void {
-    const inflight = this.inflight
-    if (inflight === undefined) return
+  private cancelPrompt(inflight: InflightPrompt, detail: string): void {
     inflight.cancelRequested = true
     inflight.admissionController.abort(new Error(detail))
     this.settleAfterQuiescence(inflight)
@@ -489,9 +509,8 @@ export class AcpSession {
         await this.agent.whenIdle()
         await this.outputTail
       }
-      /* v8 ignore next -- this prompt owns the slot until this exact settlement clears it. */
-      if (this.inflight !== inflight) return
-      this.inflight = undefined
+      /* v8 ignore next -- settlement runs once per prompt while it remains tracked. */
+      if (!this.inflights.delete(inflight)) return
       if (inflight.cancelRequested) {
         inflight.resolve('cancelled')
         return
@@ -515,8 +534,7 @@ export class AcpSession {
     })()
       /* v8 ignore start -- admissionDone only resolves; idle/output gates contain their own failures. */
       .catch((error: unknown) => {
-        if (this.inflight !== inflight) return
-        this.inflight = undefined
+        if (!this.inflights.delete(inflight)) return
         inflight.reject(internalError(`prompt settlement failed: ${errorChain(error)}`))
       })
     /* v8 ignore stop */
