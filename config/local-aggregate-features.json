@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "aggregate": {
+    "branch": "local/aggregate",
+    "upstreamRef": "origin/master",
+    "lastIntegratedUpstreamCommit": "fb2c4b9e698e30edb738bca4cf0618587db7d203",
+    "stableTagPattern": "^dsh-v\\d+\\.\\d+\\.\\d+(-rc\\.\\d+)?$"
+  },
+  "features": [
+    {
+      "branch": "fix/acp-mid-turn-steering",
+      "lastPackaged": {
+        "sourceCommit": "11be52659d6c07863fc94d24083ba1b9466e7778",
+        "aggregateCommit": "6a83e28ce1c5eaa1fe31d56122adc0dfe1a2402b"
+      },
+      "upstreamIssues": [
+        {
+          "repository": "hxy91819/deepseek-harness",
+          "number": 1,
+          "feedbackUrl": "https://github.com/hxy91819/deepseek-harness/issues/1"
+        }
+      ]
+    }
+  ]
+}
