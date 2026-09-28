@@ -63,7 +63,7 @@ pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/profiles/acp
 ### 本项目坑
 
 - 切换基线后，worktree 里会留下只剩 `node_modules` 的旧包目录（`packages/*/*`、`vendor/*`、`apps/*` 中 `git ls-files` 为空者）以及过期的 `lib/` 与 `*.tsbuildinfo`；不清理会让 tsdown 报 `Cannot find entry lib/types/...` 或 MISSING_EXPORT。install/build 前先删它们；`pnpm run clean` 在该版本会失败，不要依赖它。
-- lefthook pre-push 会跑 `pnpm run typecheck`；只含文档/脚本改动的 `fork-tooling` 推送可用 `LEFTHOOK=0` 跳过。
+- `scripts/fork-aggregate` 已内置 `LEFTHOOK=0`：聚合 merge 的都是各自分支验证过的提交，新建的 `.worktrees/aggregate-next` 没有 `node_modules`（pre-commit 找不到 tsx），`--promote` 的 push 也不再跑 pre-push typecheck；验证由脚本之后的 install/typecheck/build/test 负责。推送 `fork-tooling` 本身仍可用 `LEFTHOOK=0` 跳过 pre-push typecheck。
 
 ### 冲突怎么解决
 
