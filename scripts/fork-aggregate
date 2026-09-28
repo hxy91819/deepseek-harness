@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 聚合 merge 的提交已在各自分支验证；新建 worktree 无 node_modules，pre-commit 找不到 tsx，--promote 的 push 还会跑 typecheck。验证由脚本之后的 install/typecheck/build/test 负责。
+export LEFTHOOK=0
 set -euo pipefail
 
 usage() {
