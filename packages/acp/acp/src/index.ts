@@ -141,6 +141,10 @@ export function apply(ctx: Context, config: AcpConfig): void {
     ownedRecord(agent)?.onInboxClaimed(message, turn)
   })
 
+  ctx.on('agent/inbox/discarded', ({ agent, message }) => {
+    ownedRecord(agent)?.onInboxDiscarded(message)
+  })
+
   ctx.on('agent/error', ({ agent, turn, error }) => {
     ownedRecord(agent)?.onAgentError(turn, error)
   })
@@ -186,6 +190,7 @@ export function apply(ctx: Context, config: AcpConfig): void {
           sessionCapabilities: { close: {}, list: {}, resume: {} },
         },
         authMethods: [],
+        _meta: { midTurnSteering: true },
       }
     },
 
