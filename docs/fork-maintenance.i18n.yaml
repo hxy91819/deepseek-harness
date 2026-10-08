@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for fork-maintenance.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/fork-maintenance.md
+/fork-maintenance:
+  en: 51851f38c0381050
+  zh: d81e489cffbf7f1b
+/fork-maintenance/repository-roles:
+  en: 3592a39022f14986
+  zh: 3d07e77c7ad9aaca
+/fork-maintenance/1-develop-a-feature-or-fix:
+  en: 18a1b6b2398df688
+  zh: 5eaf60e72ab9ca08
+/fork-maintenance/2-aggregate-builds:
+  en: cb736f69b015e5b8
+  zh: b75e58b553bff041
+/fork-maintenance/2-aggregate-builds/repository-pitfalls:
+  en: acefba381f16a73a
+  zh: 468a113592a3b7f9
+/fork-maintenance/2-aggregate-builds/resolve-conflicts:
+  en: e5c992e133d33807
+  zh: 1819e8f8493e1b35
+/fork-maintenance/2-aggregate-builds/incorporate-a-new-upstream-release:
+  en: 863aa1071982a2fc
+  zh: 9ad39e6fe05fde70
+/fork-maintenance/3-upstream-feedback:
+  en: 45da55acc25e5eac
+  zh: ee080244187b06b9
