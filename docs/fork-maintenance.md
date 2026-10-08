@@ -1,51 +1,51 @@
-# Fork 维护
+# Fork maintenance
 
-这个 fork 只服务于三件事：
+English | [中文](fork-maintenance.zh.md)
 
-1. 每个功能/修复保持为一个独立、聚焦、可以直接向上游提交的分支；
-2. 本机能方便地把这些分支聚合打包；
-3. 能随时纳入上游的稳定版更新。
+This fork serves three purposes:
 
-除此之外不引入额外结构：没有领域分支、没有补丁登记表、没有冻结清单。
-分支本身就是状态，`.fork/branches` 是唯一的清单。
+1. Keep each feature or fix on an independent, focused branch ready for an upstream contribution;
+2. Combine those branches conveniently for local builds;
+3. Incorporate upstream stable releases at any time.
 
-## 仓库角色
+Do not add domain branches, patch registries, or frozen lists. Branches hold the state, and `.fork/branches` is the only inventory.
 
-| 引用 | 作用 |
+## Repository roles
+
+| Reference | Purpose |
 | --- | --- |
-| `origin` | 上游 deepseek-ai/deepseek-harness，只读 |
-| `fork` | 个人 fork，所有推送都去这里 |
-| `dsh-vX.Y.Z` / `dsh-vX.Y.Z-rc.N` tag | 上游稳定版，聚合和新分支的基线 |
-| `feature/*`、`fix/*` | 每个改动一个分支，基于基线 tag |
-| `fork-tooling` | 维护规则、`.fork/branches`、聚合脚本；和其他分支一样被 merge |
-| `local/aggregate` | 聚合产物，每次从 tag 重新生成并覆盖，根目录永远检出它 |
+| `origin` | Read-only upstream deepseek-ai/deepseek-harness |
+| `fork` | Personal fork; all pushes go here |
+| `dsh-vX.Y.Z` / `dsh-vX.Y.Z-rc.N` tag | Upstream stable release; baseline for aggregation and new branches |
+| `feature/*`, `fix/*` | One branch per change, based on the baseline tag |
+| `fork-tooling` | Maintenance rules, `.fork/branches`, and aggregation script; merged like other branches |
+| `local/aggregate` | Generated aggregate, recreated from the tag each time; always checked out at the repository root |
 
-当前基线是 `.fork/branches` 里 `base` 行的 tag。上游发布全是 prerelease：取最新的 rc 或正式 tag，不追 alpha 和 master；上游主干上还没进 tag 的提交不追，除非用户明确要求。
+The current baseline is the tag on the `base` line of `.fork/branches`. Upstream releases are prereleases: select the latest RC or final tag, not alpha or master. Do not incorporate upstream master commits absent from a tag unless the user explicitly requests them.
 
-## 1. 开发新功能或修复
+## 1. Develop a feature or fix
 
-从当前基线 tag 拉分支，在独立 worktree 里开发：
+Create a branch from the current baseline tag and develop in a separate worktree:
 
 ```bash
 base=$(git show fork-tooling:.fork/branches | awk '$1=="base"{print $2}')
 git worktree add .worktrees/<name> -b feature/<name> "$base"   # 修复用 fix/<name>
 ```
 
-- 不要从 `local/aggregate` 拉分支，否则分支会带上全部聚合内容，无法单独提给上游。
-- 只有真正依赖另一个 fork 分支时，才从那个分支拉出（叠放），并在清单说明里写"叠在 X 上"。
-- 修改已有功能：直接在它的分支上继续提交。分支落后于基线也没关系，merge 会处理；只有冲突时才 rebase。
-- 完成后：相关测试通过 → 提交 → `git push fork <branch>` 并核对远端 SHA。
-- 在 `fork-tooling` 分支的 `.fork/branches` 加一行（分支、上游状态、说明），提交并推送 `fork-tooling`。
+- Do not branch from `local/aggregate`: it carries all aggregate changes and cannot be submitted independently upstream.
+- Branch from another fork branch only for a real dependency; record "stacked on X" in the inventory description.
+- Continue existing work on its own branch. A branch may remain behind the baseline; merge handles it. Rebase only for conflicts.
+- Finish with relevant passing tests, a commit, `git push fork <branch>`, and verification of the remote SHA.
+- Add a line to `.fork/branches` on `fork-tooling` with the branch, upstream status, and description; commit and push `fork-tooling`.
 
-## 2. 聚合打包
+## 2. Aggregate builds
 
 ```bash
 scripts/fork-aggregate            # 生成 .worktrees/aggregate-next 上的 aggregate/next
 scripts/fork-aggregate --promote  # 成功后移动根目录 local/aggregate 并推送到 fork
 ```
 
-脚本从基线 tag 开始，依次 `merge --no-ff` 清单中的分支。每次都从头生成，没有中间状态需要维护。
-在 `.worktrees/aggregate-next` 里验证通过后再 `--promote`：
+The script starts from the baseline tag and merges each listed branch with `merge --no-ff`. It recreates the aggregate each time without intermediate state to maintain. Validate in `.worktrees/aggregate-next` before using `--promote`:
 
 ```bash
 cd .worktrees/aggregate-next
@@ -58,39 +58,39 @@ pnpm exec vitest run --config vitest.snapshot.config.ts snapshots/acp
 pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/profiles/acp
 ```
 
-各分支自己的测试在分支上已经跑过，聚合只验证合并结果。提升与推送到 fork 不需要再询问；本机没有部署步骤（dsh 未安装到 PATH），交付即推送 fork 的 `local/aggregate`。
+Branches have already passed their own tests; aggregation validates the merged result. Promotion and pushes to the fork require no further confirmation. The local `dsh` on PATH links to the root `apps/cli`; after promotion, install dependencies and update the root build artifacts, then verify local execution with `dsh --version` and ACP startup.
 
-### 本项目坑
+### Repository pitfalls
 
-- 切换基线后，worktree 里会留下只剩 `node_modules` 的旧包目录（`packages/*/*`、`vendor/*`、`apps/*` 中 `git ls-files` 为空者）以及过期的 `lib/` 与 `*.tsbuildinfo`；不清理会让 tsdown 报 `Cannot find entry lib/types/...` 或 MISSING_EXPORT。install/build 前先删它们；`pnpm run clean` 在该版本会失败，不要依赖它。
-- `scripts/fork-aggregate` 已内置 `LEFTHOOK=0`：聚合 merge 的都是各自分支验证过的提交，新建的 `.worktrees/aggregate-next` 没有 `node_modules`（pre-commit 找不到 tsx），`--promote` 的 push 也不再跑 pre-push typecheck；验证由脚本之后的 install/typecheck/build/test 负责。推送 `fork-tooling` 本身仍可用 `LEFTHOOK=0` 跳过 pre-push typecheck。
+- Changing the baseline can leave old package directories containing only `node_modules` (directories in `packages/*/*`, `vendor/*`, and `apps/*` with no `git ls-files` entries), stale `lib/`, and `*.tsbuildinfo`. Without cleanup, tsdown can report `Cannot find entry lib/types/...` or MISSING_EXPORT. Remove them before install/build; `pnpm run clean` fails in that version, so do not rely on it.
+- `scripts/fork-aggregate` sets `LEFTHOOK=0`: merged commits were validated on their branches, a new `.worktrees/aggregate-next` lacks `node_modules` (pre-commit cannot find tsx), and the `--promote` push skips pre-push typecheck. Validation belongs to the subsequent install/typecheck/build/test steps. Pushing `fork-tooling` itself may also use `LEFTHOOK=0` to skip pre-push typecheck.
 
-### 冲突怎么解决
+### Resolve conflicts
 
-脚本遇到冲突会停下，并判断是哪一类：
+The script stops on conflicts and identifies their category:
 
-| 类型 | 判断 | 处理 |
+| Category | Detection | Resolution |
 | --- | --- | --- |
-| 分支与上游冲突 | 该分支单独合入基线 tag 就冲突 | 在该分支 worktree 里 `git rebase --no-autostash <tag>`，修复、测试、`git push --force-with-lease fork <branch>`，重跑脚本。修好的分支同时也保持了对上游可合并。 |
-| 分支之间冲突 | 单独都能合入，一起才冲突 | 在 `.worktrees/aggregate-next` 里只做两边合并、不加新行为，`git add` 后 `git commit --no-edit`，重跑脚本。`rerere` 会记住这次解决，下次自动复用。 |
+| Branch versus upstream | The branch conflicts when merged into the baseline tag alone | Run `git rebase --no-autostash <tag>` in the branch worktree, fix, test, `git push --force-with-lease fork <branch>`, and rerun the script. The repaired branch remains mergeable upstream. |
+| Between fork branches | Each merges alone, but they conflict together | Combine both sides in `.worktrees/aggregate-next` without new behavior, run `git add` and `git commit --no-edit`, then rerun the script. `rerere` remembers the resolution for automatic reuse. |
 
-- 产品修复永远回到对应分支，不写在聚合的 merge 提交里。
-- 同一对分支反复出现非平凡冲突时，把后者 rebase 到前者上（叠放），更新清单顺序和说明。
-- 叠放分支 rebase 时从栈底开始，用 `git rebase --update-refs` 让上层分支一起移动。
+- Product fixes belong on their corresponding branches, never in aggregate merge commits.
+- If the same pair repeatedly has nontrivial conflicts, rebase the later branch onto the earlier one and update the inventory order and description.
+- Rebase stacked branches from the bottom, using `git rebase --update-refs` to move upper branches together.
 
-### 纳入上游新版本
+### Incorporate a new upstream release
 
-1. 把 `.fork/branches` 的 `base` 改成新的稳定 tag（或先用 `scripts/fork-aggregate --base <tag>` 试跑）。
-2. 运行脚本，按上表逐个处理冲突。没有冲突的分支不用动。
-3. 某个分支 rebase 后变空，说明上游已经包含它：从清单删除这一行，删除分支（fork 上的也删），在提交说明里写明被上游哪个版本吸收。
-4. 验证、`--promote`，提交并推送 `fork-tooling` 上的新 `base`。
+1. Change `base` in `.fork/branches` to the new stable tag, or first try `scripts/fork-aggregate --base <tag>`.
+2. Run the script and resolve conflicts using the table above. Branches without conflicts need no changes.
+3. A branch that becomes empty after rebase is already included upstream: remove its inventory line and delete the local and fork branches. Name the upstream release that absorbed it in the commit message.
+4. Validate, use `--promote`, and commit and push the new `base` on `fork-tooling`.
 
-## 3. 向上游反馈
+## 3. Upstream feedback
 
-分支本身就是上游 PR 的材料，这也是分支必须保持独立、基于 tag 的原因。
+Branches are the upstream PR material, so each must remain independent and based on a tag.
 
-1. 先在上游搜索是否已有相关 issue/PR，按本项目的 issue/PR 规范准备内容。
-2. **向上游提 issue、评论或 PR 之前，必须把拟提交的内容给用户逐项确认。** 用户可以决定把它标为 `fork-only` 保留在本地。
-3. 提 PR 时：从该分支 rebase 到上游主干得到一个新分支（如 `upstream/<name>`）推送到 fork，再开 PR；叠放分支要先把依赖部分一并处理或拆开。
-4. 在 `.fork/branches` 更新该行的状态和链接（`reported` / `pr-open` / `fork-only`）。
-5. 上游合并后，等它进入一个稳定 tag 再从清单移除（见上一节第 3 步）。issue 关闭本身不是移除理由。
+1. Search upstream for related issues/PRs and prepare content using this repository's issue/PR conventions.
+2. **Before submitting an upstream issue, comment, or PR, show the proposed content to the user for item-by-item confirmation.** The user may instead retain it locally as `fork-only`.
+3. For a PR, rebase onto upstream master on a new branch such as `upstream/<name>`, push it to the fork, and open the PR. First handle or split dependencies of stacked branches.
+4. Update the inventory status and link in `.fork/branches` (`reported` / `pr-open` / `fork-only`).
+5. After upstream merge, wait for inclusion in a stable tag before removing the inventory entry (step 3 of the preceding section). Closing an issue alone does not justify removal.
