@@ -42,15 +42,14 @@ git worktree add .worktrees/<name> -b feature/<name> "$base"   # 修复用 fix/<
 
 ```bash
 scripts/fork-aggregate            # 生成 .worktrees/aggregate-next 上的 aggregate/next
-scripts/fork-aggregate --promote  # 成功后移动根目录 local/aggregate 并推送到 fork
+scripts/fork-aggregate --promote  # 提升已有 aggregate/next，并推送到 fork
 ```
 
-脚本从基线 tag 开始，依次 `merge --no-ff` 清单中的分支。每次都从头生成，没有中间状态需要维护。在 `.worktrees/aggregate-next` 里验证通过后再 `--promote`：
+生成时，脚本从基线 tag 开始，依次 `merge --no-ff` 清单中的分支；`--promote` 复用已有聚合提交，检查基线、分支顺序与提交仍匹配当前清单，工作区须干净。输入变化时重新生成并验证。在 `.worktrees/aggregate-next` 里验证通过后再 `--promote`：
 
 ```bash
 cd .worktrees/aggregate-next
 pnpm install --frozen-lockfile
-pnpm run typecheck
 pnpm run build
 # 加上本次冲突或新增分支涉及的包的测试，例如 ACP 分支：
 pnpm exec vitest run packages/acp/acp
@@ -58,12 +57,12 @@ pnpm exec vitest run --config vitest.snapshot.config.ts snapshots/acp
 pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/profiles/acp
 ```
 
-各分支自己的测试在分支上已经跑过，聚合只验证合并结果。提升与推送到 fork 不需要再询问。本机 PATH 中的 `dsh` 链接到根目录 `apps/cli`；提升聚合后须安装依赖并更新根目录构建产物，再用 `dsh --version` 和 ACP 启动验证本地运行。
+各分支自己的测试在分支上已经跑过，聚合只验证合并结果。`build` 包含类型编译和原生模块构建，随后再跑测试；需要 lint 时使用 `pnpm run lint:contracts-ready`。文档改动在所属分支执行文档检查；完整 `doc-sync` 在构建之后执行，避免同时重写 `lib/`。提升与推送到 fork 不需要再询问。本机 PATH 中的 `dsh` 链接到根目录 `apps/cli`；提升聚合后须安装依赖并更新根目录构建产物，再用 `dsh --version` 和 ACP 启动验证本地运行。
 
 ### 本项目坑
 
-- 切换基线后，worktree 里会留下只剩 `node_modules` 的旧包目录（`packages/*/*`、`vendor/*`、`apps/*` 中 `git ls-files` 为空者）以及过期的 `lib/` 与 `*.tsbuildinfo`；不清理会让 tsdown 报 `Cannot find entry lib/types/...` 或 MISSING_EXPORT。install/build 前先删它们；`pnpm run clean` 在该版本会失败，不要依赖它。
-- `scripts/fork-aggregate` 已内置 `LEFTHOOK=0`：聚合 merge 的都是各自分支验证过的提交，新建的 `.worktrees/aggregate-next` 没有 `node_modules`（pre-commit 找不到 tsx），`--promote` 的 push 也不再跑 pre-push typecheck；验证由脚本之后的 install/typecheck/build/test 负责。推送 `fork-tooling` 本身仍可用 `LEFTHOOK=0` 跳过 pre-push typecheck。
+- 维护命令使用带开发头文件的 Node。基线变化后，旧包的生成目录可能导致 MISSING_EXPORT；需要清理时，在待构建目录执行 `pnpm run clean`。它删除 `lib/`、`tsbuildinfo` 及 `packages/*/*` 下只含已知生成文件的孤立目录；未知文件会使清理失败并列出路径。它不清理 `vendor/*`、`apps/*` 的孤立目录。日常重建保留缓存，避免每次冷编译。
+- `scripts/fork-aggregate` 已内置 `LEFTHOOK=0`：聚合 merge 的都是各自分支验证过的提交，新建的 `.worktrees/aggregate-next` 没有 `node_modules`（pre-commit 找不到 tsx），`--promote` 的 push 也不再跑 pre-push typecheck；验证由脚本之后的 install/build/test 负责。推送 `fork-tooling` 本身仍可用 `LEFTHOOK=0` 跳过 pre-push typecheck。
 
 ### 冲突怎么解决
 

@@ -42,15 +42,14 @@ git worktree add .worktrees/<name> -b feature/<name> "$base"   # 修复用 fix/<
 
 ```bash
 scripts/fork-aggregate            # 生成 .worktrees/aggregate-next 上的 aggregate/next
-scripts/fork-aggregate --promote  # 成功后移动根目录 local/aggregate 并推送到 fork
+scripts/fork-aggregate --promote  # 提升已有 aggregate/next，并推送到 fork
 ```
 
-The script starts from the baseline tag and merges each listed branch with `merge --no-ff`. It recreates the aggregate each time without intermediate state to maintain. Validate in `.worktrees/aggregate-next` before using `--promote`:
+Generation starts from the baseline tag and merges each listed branch with `merge --no-ff`. `--promote` reuses the existing aggregate commit, checks that its baseline, branch order, and commits still match the current inventory, and requires a clean worktree. Regenerate and validate when inputs change. Validate in `.worktrees/aggregate-next` before using `--promote`:
 
 ```bash
 cd .worktrees/aggregate-next
 pnpm install --frozen-lockfile
-pnpm run typecheck
 pnpm run build
 # 加上本次冲突或新增分支涉及的包的测试，例如 ACP 分支：
 pnpm exec vitest run packages/acp/acp
@@ -58,12 +57,12 @@ pnpm exec vitest run --config vitest.snapshot.config.ts snapshots/acp
 pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/profiles/acp
 ```
 
-Branches have already passed their own tests; aggregation validates the merged result. Promotion and pushes to the fork require no further confirmation. The local `dsh` on PATH links to the root `apps/cli`; after promotion, install dependencies and update the root build artifacts, then verify local execution with `dsh --version` and ACP startup.
+Branches have already passed their own tests; aggregation validates the merged result. `build` includes type compilation and native-module compilation, so run tests afterward; use `pnpm run lint:contracts-ready` when lint is relevant. Validate documentation changes on their owning branch; run full `doc-sync` after the build to avoid concurrent writes to `lib/`. Promotion and pushes to the fork require no further confirmation. The local `dsh` on PATH links to the root `apps/cli`; after promotion, install dependencies and update the root build artifacts, then verify local execution with `dsh --version` and ACP startup.
 
 ### Repository pitfalls
 
-- Changing the baseline can leave old package directories containing only `node_modules` (directories in `packages/*/*`, `vendor/*`, and `apps/*` with no `git ls-files` entries), stale `lib/`, and `*.tsbuildinfo`. Without cleanup, tsdown can report `Cannot find entry lib/types/...` or MISSING_EXPORT. Remove them before install/build; `pnpm run clean` fails in that version, so do not rely on it.
-- `scripts/fork-aggregate` sets `LEFTHOOK=0`: merged commits were validated on their branches, a new `.worktrees/aggregate-next` lacks `node_modules` (pre-commit cannot find tsx), and the `--promote` push skips pre-push typecheck. Validation belongs to the subsequent install/typecheck/build/test steps. Pushing `fork-tooling` itself may also use `LEFTHOOK=0` to skip pre-push typecheck.
+- Run maintenance commands with a Node installation that includes development headers. Generated directories from removed packages can cause MISSING_EXPORT after a baseline change; run `pnpm run clean` in the target build directory when cleanup is needed. It deletes `lib/`, `tsbuildinfo`, and orphaned directories under `packages/*/*` containing only known generated files; unknown files make cleanup fail and list their paths. It does not remove orphaned directories under `vendor/*` or `apps/*`. Preserve caches for ordinary rebuilds to avoid repeated cold compilation.
+- `scripts/fork-aggregate` sets `LEFTHOOK=0`: merged commits were validated on their branches, a new `.worktrees/aggregate-next` lacks `node_modules` (pre-commit cannot find tsx), and the `--promote` push skips pre-push typecheck. Validation belongs to the subsequent install/build/test steps. Pushing `fork-tooling` itself may also use `LEFTHOOK=0` to skip pre-push typecheck.
 
 ### Resolve conflicts
 
