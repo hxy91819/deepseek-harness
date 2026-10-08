@@ -56,8 +56,10 @@ const WAIT_POLL_INTERVAL_MS = 10
  * `promptAndCancel` starts a prompt without awaiting completion, waits for a
  * readiness condition, then cancels and awaits completion. Its optional
  * `waitForFile` observes a cwd-relative marker; otherwise it waits for the
- * durable turn start. The standalone `waitForFile` holds the next script step
- * behind the same marker.
+ * durable turn start. `promptAndSteer` shares that dispatch shape but sends a
+ * second `session/prompt` while the first is in flight, then awaits both —
+ * the mid-turn steering path a steering-capable bridge accepts. The
+ * standalone `waitForFile` holds the next script step behind the same marker.
  * `promptAndWaitForAgentMessage` arms an exact text-chunk waiter before sending
  * the prompt, then keeps the application live until that later update arrives.
  * `waitForTurnStart` waits for an open durable turn, optionally at or beyond a
@@ -87,6 +89,12 @@ export type InputStep =
   | {
     op: 'promptAndCancel'
     text: string
+    waitForFile?: { path: string; timeoutMs?: number }
+  }
+  | {
+    op: 'promptAndSteer'
+    text: string
+    steerText: string
     waitForFile?: { path: string; timeoutMs?: number }
   }
   | { op: 'waitForFile'; path: string; timeoutMs?: number }
@@ -490,6 +498,23 @@ async function runStep(
       }
       await client.cancel({ sessionId })
       await promptDone
+      return
+    }
+    case 'promptAndSteer': {
+      const sessionId = getSessionId()
+      if (sessionId === undefined) throw new Error('snapshot-harness: promptAndSteer before newSession')
+      // Dispatch without awaiting because the first prompt stays in flight
+      // while the second steers into its turn; both settle with the turn.
+      const first = client.prompt({ sessionId, prompt: [{ type: 'text', text: step.text }] })
+      if (step.waitForFile !== undefined) {
+        await waitForWorkspaceFile(cwd, step.waitForFile.path, step.waitForFile.timeoutMs)
+      } else {
+        await waitForTurnStart(sessionId)
+      }
+      await Promise.all([
+        first,
+        client.prompt({ sessionId, prompt: [{ type: 'text', text: step.steerText }] }),
+      ])
       return
     }
     case 'waitForFile':
