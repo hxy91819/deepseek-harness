@@ -23,6 +23,8 @@ Do not add domain branches, patch registries, or frozen lists. Branches hold the
 
 The current baseline is the tag on the `base` line of `.fork/branches`. Upstream releases are prereleases: select the latest RC or final tag, not alpha or master. Do not incorporate upstream master commits absent from a tag unless the user explicitly requests them.
 
+For repeatable provider setup across machines and profiles, use the [Ollama Cloud preset guide](cookbook/ollama-cloud-profiles.md).
+
 ## 1. Develop a feature or fix
 
 Create a branch from the current baseline tag and develop in a separate worktree:
