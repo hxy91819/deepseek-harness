@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-18-acp-mid-turn-steering.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-18-acp-mid-turn-steering.md
+/agent-note-admit-concurrent-acp-prompts-as-mid-turn-steering:
+  en: fb059b5e9b4f6cf9
+  zh: 12a6d4e521392ba0
+/agent-note-admit-concurrent-acp-prompts-as-mid-turn-steering/problem:
+  en: 16a1dbfef7e6bd32
+  zh: ebc33ffb5825a5a3
+/agent-note-admit-concurrent-acp-prompts-as-mid-turn-steering/decision:
+  en: 7c3e3228192f887c
+  zh: 45c80463545e3526
+/agent-note-admit-concurrent-acp-prompts-as-mid-turn-steering/alternatives-considered:
+  en: bba0e311604e09ee
+  zh: aba41a974ac4428a
+/agent-note-admit-concurrent-acp-prompts-as-mid-turn-steering/consequences:
+  en: f71343d019addd0f
+  zh: 2d370fa4ff9fa01d
+/agent-note-admit-concurrent-acp-prompts-as-mid-turn-steering/verification:
+  en: c3ee926bca66aac5
+  zh: ac617d38f7661442
