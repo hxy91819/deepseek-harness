@@ -23,6 +23,8 @@
 
 当前基线是 `.fork/branches` 里 `base` 行的 tag。上游发布全是 prerelease：取最新的 rc 或正式 tag，不追 alpha 和 master；上游主干上还没进 tag 的提交不追，除非用户明确要求。
 
+跨机器和 profile 重复配置提供商时，使用 [Ollama Cloud 预设指南](cookbook/ollama-cloud-profiles.zh.md)。
+
 ## 1. 开发新功能或修复
 
 从当前基线 tag 拉分支，在独立 worktree 里开发：
