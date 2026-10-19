@@ -72,6 +72,18 @@ describe('unique object-name prefix search', () => {
 })
 
 describe('maintained repository reference policy', () => {
+  it.each(['uv.lock', 'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock'])('does not interpret generated dependency data in %s as commit references', (name) => {
+    const digits = String(6344 * 1000 + 383)
+    const commits = new Set([digits])
+    expect(findRepositoryReferences(`nested/${name}`, `size = ${digits}\nrevision = "${digits}"`, commits)).toEqual([])
+    expect(findRepositoryReferences(`nested/${name}`, organizationUrl, commits)).toEqual([
+      { file: `nested/${name}`, line: 1, kind: 'organization-url' },
+    ])
+    expect(findRepositoryReferences(`${name}.md`, digits, commits)).toEqual([
+      { file: `${name}.md`, line: 1, kind: 'commit-hash' },
+    ])
+  })
+
   it('permits only the independent kit repository and its source URLs', () => {
     for (const suffix of ['', '.git', '/tree/main/packages/entry']) {
       expect(findRepositoryReferences('package.json', `${organizationUrl}/libreoffice-kit${suffix}`, new Set())).toEqual([])

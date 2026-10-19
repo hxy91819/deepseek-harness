@@ -63,6 +63,7 @@ pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/profiles/acp
 
 ### 本项目坑
 
+- 仓库引用检查允许生成的依赖锁文件（`uv.lock`、`pnpm-lock.yaml`、`package-lock.json`、`yarn.lock`）包含类似提交号的值：依赖固定版本、哈希和数值元数据属于数据。这些文件中的禁用组织 URL 仍会被检查。
 - 维护命令使用带开发头文件的 Node。基线变化后，旧包的生成目录可能导致 MISSING_EXPORT；需要清理时，在待构建目录执行 `pnpm run clean`。它删除 `lib/`、`tsbuildinfo` 及 `packages/*/*` 下只含已知生成文件的孤立目录；未知文件会使清理失败并列出路径。它不清理 `vendor/*`、`apps/*` 的孤立目录。日常重建保留缓存，避免每次冷编译。
 - `scripts/fork-aggregate` 已内置 `LEFTHOOK=0`：聚合 merge 的都是各自分支验证过的提交，新建的 `.worktrees/aggregate-next` 没有 `node_modules`（pre-commit 找不到 tsx），`--promote` 的 push 也不再跑 pre-push typecheck；验证由脚本之后的 install/build/test 负责。推送 `fork-tooling` 本身仍可用 `LEFTHOOK=0` 跳过 pre-push typecheck。
 

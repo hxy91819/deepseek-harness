@@ -63,6 +63,7 @@ Branches have already passed their own tests; aggregation validates the merged r
 
 ### Repository pitfalls
 
+- The repository-reference check accepts commit-like values in generated dependency lockfiles (`uv.lock`, `pnpm-lock.yaml`, `package-lock.json`, and `yarn.lock`): dependency pins, hashes, and numeric metadata are data. Disallowed organization URLs are still checked in those files.
 - Run maintenance commands with a Node installation that includes development headers. Generated directories from removed packages can cause MISSING_EXPORT after a baseline change; run `pnpm run clean` in the target build directory when cleanup is needed. It deletes `lib/`, `tsbuildinfo`, and orphaned directories under `packages/*/*` containing only known generated files; unknown files make cleanup fail and list their paths. It does not remove orphaned directories under `vendor/*` or `apps/*`. Preserve caches for ordinary rebuilds to avoid repeated cold compilation.
 - `scripts/fork-aggregate` sets `LEFTHOOK=0`: merged commits were validated on their branches, a new `.worktrees/aggregate-next` lacks `node_modules` (pre-commit cannot find tsx), and the `--promote` push skips pre-push typecheck. Validation belongs to the subsequent install/build/test steps. Pushing `fork-tooling` itself may also use `LEFTHOOK=0` to skip pre-push typecheck.
 
