@@ -22,7 +22,7 @@ vi.mock('../scripts/desktop-build-paths.mjs', async importOriginal => ({
   }),
 }))
 vi.mock('@electron/get', () => ({ downloadArtifact: async () => 'electron.zip' }))
-vi.mock('extract-zip', () => ({ default: async () => {
+vi.mock('../../../scripts/zip-extract.ts', () => ({ extractZip: async () => {
   if (state.failure === 'electron') throw new Error('Electron extraction failed')
 } }))
 vi.mock('node:child_process', async importOriginal => ({
