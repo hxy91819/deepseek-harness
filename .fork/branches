@@ -7,3 +7,4 @@ base dsh-v0.2.1-rc.2
 
 fork-tooling                internal                                                       # fork 维护规则与聚合脚本
 fix/acp-mid-turn-steering   reported        https://github.com/deepseek-ai/deepseek-harness/discussions/593#discussioncomment-18637238   # ACP 把并发 session/prompt 作为 mid-turn steering 接入，并宣告 _meta.midTurnSteering
+fix/security-dependency-bumps needs-feedback                                  # 依赖安全修复；上游已禁用 PR 创建，分支已推送 fork（镜像 PR #2）
