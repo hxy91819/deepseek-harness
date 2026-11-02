@@ -31,6 +31,26 @@ describe('ACP connection ownership', () => {
     expect(harness.ctx.agents.get(SessionId(sessionId))).toBeUndefined()
   })
 
+  it('disposal settles every in-flight prompt of a session', async () => {
+    harness = await makeBridgeHarness({ script: ['hang'] })
+    await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
+    const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
+    const agent = harness.ctx.agents.get(SessionId(sessionId))!
+    const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'one' }] })
+    await vi.waitFor(() => { expect(agent.status).toBe('running') })
+    const second = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'two' }] })
+    await vi.waitFor(() => {
+      expect(agent.session.snapshotEvents().some(event => event.type === 'agent/inbox/spliced'
+        && event.data.target === 'next-step' && event.data.inserted.length > 0)).toBe(true)
+    })
+
+    await harness.acpFiber.dispose()
+    await expect(first).resolves.toEqual({ stopReason: 'cancelled' })
+    await expect(second).resolves.toEqual({ stopReason: 'cancelled' })
+    expect(agent.status).toBe('idle')
+    expect(harness.ctx.agents.get(SessionId(sessionId))).toBeUndefined()
+  })
+
   it('disposal drains asynchronous assistant image delivery before releasing sessions', async () => {
     const script: StreamChunk[][] = []
     harness = await makeBridgeHarness({ script })
