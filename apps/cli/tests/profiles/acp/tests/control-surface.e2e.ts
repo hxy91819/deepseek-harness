@@ -56,7 +56,7 @@ describe('standard ACP v1 control surface', () => {
         promptCapabilities: { image: false, audio: false, embeddedContext: false },
         sessionCapabilities: { close: {}, list: {}, resume: {} },
       })
-      expect('_meta' in initialized).toBe(false)
+      expect(initialized._meta).toEqual({ midTurnSteering: true })
       const created = await first.client.newSession({ cwd, mcpServers })
       const beta = selectValue(created.configOptions, 'model', 'Beta')
       const selectedModel = await first.client.setSessionConfigOption({
