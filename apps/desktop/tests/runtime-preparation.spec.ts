@@ -23,7 +23,7 @@ vi.mock('../scripts/desktop-build-paths.mjs', async importOriginal => ({
   }),
 }))
 vi.mock('@electron/get', () => ({ downloadArtifact: async () => 'electron.zip' }))
-vi.mock('extract-zip', () => ({ default: state.extractElectron }))
+vi.mock('../../../scripts/zip-extract.ts', () => ({ extractZip: state.extractElectron }))
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(),
   execFileSync: (file: string) => file === '/usr/libexec/PlistBuddy' ? '12.0\n' : '24.18.1\n',
