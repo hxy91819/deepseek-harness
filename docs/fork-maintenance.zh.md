@@ -25,6 +25,21 @@
 
 跨机器和 profile 重复配置提供商时，使用 [Ollama Cloud 预设指南](cookbook/ollama-cloud-profiles.zh.md)。
 
+## 跨环境默认插件
+
+这个 fork 的默认个人插件是 `session-permission`，统一维护在 [hxy91819/dsh-plugins](https://github.com/hxy91819/dsh-plugins)。新建、迁移或重置 DSH 环境或 profile 时都配置它。权限默认使用 `auto`（Auto review / Approve for me）；用户显式选择其他模式时沿用其选择。该约定适用于不同机器、执行环境和 DSH home。
+
+BB 使用现有 `acp-dsh` provider，并选择 `permissionMode: "auto"`；[ACP 适配器](https://github.com/hxy91819/bb-plugins/tree/main/plugins/provider-acp)已经从固定 revision 自动加载配套插件。同一个 ACP profile 不再另装第二份 Auto review integration。
+
+独立 DSH 在需要的每个 profile 中安装 bundle，选择插件 CI 已通过的不可变 revision，并保留模型路由和环境本地凭据：
+
+```bash
+dsh plugin --profile <profile> add 'https://codeload.github.com/hxy91819/dsh-plugins/tar.gz/<CI-passed-revision>'
+DSH_SESSION_PERMISSION_PRESET=auto dsh --profile <profile>
+```
+
+bundle 挂载 DSH 原生 Auto review，在根 Agent 新建和恢复时选择指定 preset；委派子 Agent 保留 DSH 自己的策略。需要 Full access 时仍可选择 `danger-full-access`。BB 通过适配器管理这个选择及进程恢复。安装、验证步骤、前提和独立 profile 示例以[插件仓库](https://github.com/hxy91819/dsh-plugins#readme)为准；实际固定的 revision 写入使用方 profile 或依赖 lockfile，不在本指南复制版本清单。
+
 ## 1. 开发新功能或修复
 
 从当前基线 tag 拉分支，在独立 worktree 里开发：
