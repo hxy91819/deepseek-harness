@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for ollama-cloud-profiles.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/cookbook/ollama-cloud-profiles.md
+/reuse-ollama-cloud-across-environments:
+  en: 4578fe6a3f3e0649
+  zh: 004422620aa60b49
+/reuse-ollama-cloud-across-environments/summary:
+  en: 18ccc0e8f4482bfa
+  zh: 20cbc3df3a5c76d6
+/reuse-ollama-cloud-across-environments/table-of-contents:
+  en: 3b3f04bfd73e10da
+  zh: 141a0c635b8f40b1
+/reuse-ollama-cloud-across-environments/install-or-update:
+  en: 095682e6f5cde79f
+  zh: 7edab76b87dfc880
+/reuse-ollama-cloud-across-environments/declared-capabilities:
+  en: e2cb1f20292544e5
+  zh: d6b6ed8a2afbc3db
+/reuse-ollama-cloud-across-environments/validate-and-recover:
+  en: b1eb0ab9e9ebb217
+  zh: f8900cd089f57c73
+/reuse-ollama-cloud-across-environments/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269
