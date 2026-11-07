@@ -82,11 +82,16 @@ for (const filename of tarballs) {
     execFileSync('tar', ['-xOf', join(packagesDir, filename), 'package/package.json'], { encoding: 'utf8' }),
   )
   if (manifests.has(manifest.name)) throw new Error(`重复包 ${manifest.name}`)
-  manifests.set(manifest.name, { filename, version: manifest.version })
+  // npm aborts a hard dependency on a foreign platform but skips an optional one.
+  const platformGated = manifest.os !== undefined || manifest.cpu !== undefined
+  manifests.set(manifest.name, { filename, version: manifest.version, platformGated })
 }
 const dependencies = {}
+const optionalDependencies = {}
 for (const [name, entry] of [...manifests].sort(([left], [right]) => left.localeCompare(right))) {
-  dependencies[name] = `file:packages/${entry.filename}`
+  const spec = `file:packages/${entry.filename}`
+  if (entry.platformGated) optionalDependencies[name] = spec
+  else dependencies[name] = spec
 }
 
 const readme = `# DeepSeek Harness 个人 fork
@@ -116,6 +121,7 @@ writeFileSync(
       engines: { node: '^22.19.0 || >=24.0.0' },
       scripts: { dsh: 'dsh' },
       dependencies,
+      ...(Object.keys(optionalDependencies).length === 0 ? {} : { optionalDependencies }),
     },
     null,
     2,
