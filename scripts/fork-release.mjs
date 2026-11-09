@@ -96,7 +96,7 @@ for (const [name, entry] of [...manifests].sort(([left], [right]) => left.locale
 
 const readme = `# DeepSeek Harness 个人 fork
 
-基于 \`${base}\`，包含 ACP mid-turn steering 补丁及依赖安全修复。
+基于 \`${base}\`，包含依赖安全修复；ACP mid-turn steering 由配套插件提供。
 
 需要 Node.js \`^22.19.0 || >=24.0.0\` 和 npm。在解压目录执行：
 
