@@ -1,0 +1,35 @@
+# Reusable provider patch; credentials stay in each environment's credential store.
+- id: llm-pi-ai
+  config:
+    providers:
+      ollama-cloud:
+        displayName: Ollama Cloud
+        apiKeyEnv: OLLAMA_API_KEY
+        api: openai-responses
+        baseURL: https://ollama.com/v1
+        reasoning: max
+        # Inline base64 only: leave room for text, replay metadata, and tools.
+        maxRequestImageBytes: 4194304
+        requestImagePixelBudget: 4194304
+        requestImageMaxBytes: 1048576
+        defaultContextWindow: 524288
+        defaultMaxTokens: 65536
+        models:
+          - id: deepseek-v4.1-flash
+            name: DeepSeek V4.1 Flash (Ollama Cloud)
+            contextWindow: 524288
+            maxTokens: 65536
+            input: [text, image]
+            reasoningEfforts:
+              off: none
+              high: high
+              max: max
+          - id: deepseek-v4-pro:0813
+            name: DeepSeek V4 Pro 0813 (Ollama Cloud)
+            contextWindow: 1048576
+            maxTokens: 65536
+            input: [text]
+            reasoningEfforts:
+              off: none
+              high: high
+              max: max
