@@ -27,18 +27,18 @@ For repeatable provider setup across machines and profiles, use the [Ollama Clou
 
 ## Default plugins across environments
 
-The fork's default personal plugin is `session-permission`, maintained in [hxy91819/dsh-plugins](https://github.com/hxy91819/dsh-plugins). Configure it whenever creating, migrating, or resetting a DSH environment or profile. The default permission is `auto` (Auto review / Approve for me); an explicit user selection takes precedence. This applies across machines, execution environments, and DSH homes.
+The fork's default personal plugin is `session-permission`, maintained in [hxy91819/dsh-plugins](https://github.com/hxy91819/dsh-plugins). Configure it whenever creating, migrating, or resetting a DSH environment or profile. The default permission is `danger-full-access` (`full` in BB), without Auto review; an explicit user selection takes precedence. This applies across machines, execution environments, and DSH homes.
 
-For BB, select the existing `acp-dsh` provider with `permissionMode: "auto"`; the [ACP adapter](https://github.com/hxy91819/bb-plugins/tree/main/plugins/provider-acp) already loads the companion plugin from a pinned revision. Keep the ACP profile free of a second installation of the same Auto review integration.
+For BB, select the existing `acp-dsh` provider with `permissionMode: "full"`; the [ACP adapter](https://github.com/hxy91819/bb-plugins/tree/main/plugins/provider-acp) already loads the companion plugin from a pinned revision. Keep the ACP profile free of a second installation of the same Auto review integration.
 
 For standalone DSH, install the bundle into each intended profile using an immutable revision whose plugin CI has passed; preserve its model routes and environment-local credentials:
 
 ```bash
 dsh plugin --profile <profile> add 'https://codeload.github.com/hxy91819/dsh-plugins/tar.gz/<CI-passed-revision>'
-DSH_SESSION_PERMISSION_PRESET=auto dsh --profile <profile>
+DSH_SESSION_PERMISSION_PRESET=danger-full-access dsh --profile <profile>
 ```
 
-The bundle mounts DSH's native Auto review and selects the requested preset for newly created and restored root agents; delegated children retain DSH's own policy. Full access remains available through `danger-full-access`. BB manages this selection and process recovery through its adapter. Install and verification procedures, prerequisites, and the standalone profile example live in the [plugin repository](https://github.com/hxy91819/dsh-plugins#readme); record the actual pinned revision in the consuming profile or dependency lockfile rather than copying it into this guide.
+The bundle mounts DSH's native Auto review and selects the requested preset for newly created and restored root agents; delegated children retain DSH's own policy. Auto review remains available by explicitly selecting `auto`. BB manages this selection and process recovery through its adapter. Install and verification procedures, prerequisites, and the standalone profile example live in the [plugin repository](https://github.com/hxy91819/dsh-plugins#readme); record the actual pinned revision in the consuming profile or dependency lockfile rather than copying it into this guide.
 
 ## 1. Develop a feature or fix
 
