@@ -48,8 +48,9 @@ overrides:
   'minimatch': '11.0.1'
   # GHSA-22jm-h49p-29qw, GHSA-46jr-4wx8-v453, GHSA-6prh-2h8m-c8cw, GHSA-rvq5-wwqv-78pq
   '@modelcontextprotocol/sdk': '1.32.2'
-  # GHSA-4487-j8r4-4g2f and related certificate-chain advisories; selfsigned accepts node-forge ^1.
-  'node-forge': '1.4.2'
+  # GHSA-4487-j8r4-4g2f, GHSA-6889-vf6x-f3g5, GHSA-6cv4-p8m7-4r25,
+  # GHSA-j8rw-jp99-435v, GHSA-w4xr-hqv8-ch44; selfsigned accepts node-forge ^1.
+  'node-forge': '1.4.3'
   # GHSA-6pq8-jhm2-2vcw
   'qs': '6.17.1'
   # GHSA-4qv8-2p9j-2685, GHSA-xjj6-f33q-929c, GHSA-3wwx-pv8p-q78v, GHSA-2gqq-gqf2-x968, GHSA-2jfj-6hjv-fm6j
