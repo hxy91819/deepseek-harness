@@ -64,7 +64,8 @@ overrides:
   'uuid@^8.3.0': '11.1.1'
   'uuid@^9.0.0': '11.1.1'
   # GHSA-4w7w-66w2-5vf9 and related Vite advisories have no 5.x patch; VitePress 1.6.4 runs on Vite 6.4.5.
-  'vitepress>vite': '6.4.5'
+  # VitePress accepts Vite 6; keep its copy on the same patched patch release as the website.
+  'vitepress>vite': '6.4.6'
   # GHSA-mrhx-c7xc-m3w5
   'zod': '4.6.6'
 
